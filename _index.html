@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<h1>OS.js - @BrowserFS - adapter</h1>
+<pre></pre>
+<script>
+  const script = document.currentScript;
+  const pre = script.previousElementSibling;
+  const log = (...args)=> pre.append(
+    args.map(o=>String(o)).join(' ') + '\n'
+  );
+  const hr = ()=> pre.appendChild(document.createElement('hr'));
+
+  const escstr = (s)=> s.match(/\W/) ? `"${s}"` : s;
+  const logkv = (k,v)=>{
+    if(k.split('.').length >3) return;
+    log(k+':', '    \t', 
+      v instanceof Function ? String(v).replace(/(\{|(?<==>)).*$/s,'\u2026') :
+      v instanceof Object ? v.constructor?.name || 'Object' :
+      v && (typeof v === 'object') ? 'Object.create(null)' :
+      String(v)
+    );
+    if((typeof v === 'object') && !(v instanceof Array))
+      Object.entries(v).map(
+        ([k2,v])=>logkv(k+'.'+escstr(k2),v)
+      );
+    return v;
+  }
+
+  onerror = log;
+  onload = setTimeout(async()=> {
+    logkv('require', requirejs);
+    log();
+
+    var main = logkv('main', require('main'));
+    /* ---- */ logkv('{\u2026main}', {...main});
+    log();
+
+    /* ---- */ logkv('default', main.default);
+    var mods = logkv('await default', await main.default);
+    logkv('\u2026browserfs\u2024fs', (await main.default).browserfs.fs);
+    log();
+
+    /*
+     * Prepare try environnement
+     */
+
+    var AsyncFunction = Object.getPrototypeOf(async function() {}).constructor;
+    var run = async (s)=>{
+      try{ log(s), await AsyncFunction(s)() }
+      catch(e){ log(e); throw(e) }
+    };
+
+    log();
+    requirejs.config({map:{'*':{'@osjs/browserfs-adapter': 'main'}}});
+    await run(`globalThis.adapter = require('@osjs/browserfs-adapter')`)
+    await run(`globalThis.modules = await require('@osjs/browserfs-adapter').default`)
+
+    logkv('globalThis.osjs', globalThis.osjs = ((r,c)=>(
+      r={
+        'osjs/locale': {
+          translate: (k,...a)=>[
+            '${', k, '(', a, ')}',
+          ].join('')
+        },
+        'osjs/vfs': {}
+      },
+      c={
+        singleton: (n,f)=> r[n]||=f(c),
+        make: (n)=> Object.assign({},r[n]),
+        config: (k)=> JSON.parse(JSON.stringify(
+          k.split('.').reduce(
+            (o,k)=>o?.[k], c.configuration
+          ) || null
+        ))
+      }
+    ))());
+    log();
+
+    hr();
+    await run(`globalThis.mounts =
+    [{
+      name: 'localstorage',
+      label: 'Browser low data',
+      adapter: 'bfs',
+      attributes: {
+        fs: 'Storage'
+      }
+    },{
+      name: 'opfs',
+      label: 'Browser files',
+      adapter: 'bfs',
+      attributes: {
+        fs: 'FileSystemAccess',
+        handle: await navigator.storage.getDirectory()
+      }
+    },{
+      name: 'debug-bfs',
+      label: 'BrowserFS internals',
+      adapter: 'bfs',
+      attributes: {
+        root: '/'
+      }
+    },{
+      name: 'test-shortcut',
+      label: 'My Documents',
+      adapter: 'bfs',
+      attributes: {
+        root: 'opfs:/MyDocuments'
+      }
+    }].reduce((o,m)=>({
+      [m.name]: {
+        _adapter: adapter(osjs),
+        root: \`\${m.name}:/\`,
+        ...m
+      }, ...o
+    }),{})`)
+    hr();
+    log()
+
+    await run(`
+	globalThis.fscall =
+		(mp,op,...args)=>(
+			args.path = (n)=> (args[n] = {path: mounts[mp].root + args[n].replace(/^\\//,'')}),
+			!op.includes('mount') && args.path(0),
+			(op === 'copy' || op === 'rename') && args.path(1),
+			(mp=mounts[mp])._adapter[op](...args,mp)
+		)
+    `)
+    log()
+
+    await run(`
+	var fscall = (...args)=>globalThis.fscall(...args).then(
+		r => log(args[0], args[1], \`"\${args[2]}"\`, ': \t',
+			JSON.stringify(r instanceof ArrayBuffer ? Array.from(new Uint8Array(r)) : r)
+				.replaceAll('}]',  '}\\n\t]')
+				.replaceAll('[{',  '[\\n\t\t{')
+				.replaceAll('},{', '},\\n\t\t{')
+		)
+	) ;
+
+	await fscall('localstorage', 'mount', {})
+	await fscall('debug-bfs', 'mount', {})
+	await fscall('debug-bfs', 'readdir', '/', {})
+	await fscall('debug-bfs', 'readdir', '/localstorage:', {})
+	await fscall('opfs', 'mount', {})
+	log()
+
+	await fscall('opfs', 'readdir', '/', {})
+	await fscall('opfs', 'unlink',  '/', {})
+	await fscall('opfs', 'readdir', '/', {})
+	log()
+
+	await fscall('opfs', 'mkdir',     '/MyDocument', {})
+	await fscall('opfs', 'mkdir',     '/MyDocument/custom', {})
+	await fscall('opfs', 'writefile', '/MyDocument/file', [1,2,45], {})
+	await fscall('opfs', 'rename',    '/MyDocument', '/MyDocuments', {})
+	await fscall('opfs', 'readdir',   '/MyDocuments', {})
+	log()
+
+	await fscall('test-shortcut', 'mount', {})
+	await fscall('test-shortcut', 'readdir', '/',  {})
+	await fscall('test-shortcut', 'readfile', '/file', {})
+	log()
+
+	await fscall('debug-bfs', 'mount', {}).catch(e => log('debug-bfs mount :  ', e))
+	await fscall('debug-bfs', 'readdir', '/', {})
+	log()
+
+	await fscall('opfs', 'readdir', '/', {})
+	await fscall('opfs', 'unlink',  '/', {})
+	await fscall('opfs', 'readdir', '/', {})
+	log()
+
+	await fscall('opfs', 'unmount', {})
+	await fscall('opfs', 'readdir', '/', {}).catch(e => log('opfs readdir "/" :  ', e))
+	log()
+    `)
+
+    hr();
+    log();
+    log('\t\t||\tTESTS DONE\t||');
+    log();
+    hr();
+    log();
+    log('\tYou can now play into the javascript dev console...');
+    log();
+    log();
+
+  },300)
+
+
+
+/// fail to create opfs dir
+/// exist throw exception insteadof returning false
+
+</script>
+<script src='_require.js' data-main='main'></script>
+</html>

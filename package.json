@@ -1,0 +1,45 @@
+{
+  "name": "@osjs/browserfs-adapter",
+  "version": "0.1.0",
+  "description": "@BrowserFS VFS Adapter for OS.js",
+  "main": "main.js",
+  "files": [
+    "amdefine.js",
+    "bfs-adapter.js",
+    "broofa-mime.js",
+    "browser-fs-core.min.js",
+    "browser-fs-core.min.js.map",
+    "browser-fs-dom.min.js",
+    "browser-fs-dom.min.js.map",
+    "main.js",
+    "_*"
+  ],
+  "bin": {
+    "bfs-adapter-prepare": "./_prepare.js",
+    "bfs-adapter-test": "./_test.js"
+  },
+  "scripts": {
+    "dependencies": "node _prepare.js",
+    "install": "node _prepare.js",
+    "prepack": "node _prepare.js",
+    "test": "node _test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/saoirse-iontach/osjs-browserfs-adapter.git"
+  },
+  "keywords": [
+    "osjs",
+    "browserfs"
+  ],
+  "author": "saoirse-iontach",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/saoirse-iontach/osjs-browserfs-adapter/issues"
+  },
+  "homepage": "https://github.com/saoirse-iontach/osjs-browserfs-adapter#readme",
+  "devDependencies": {
+    "@browserfs/core": "saoirse-iontach/browser-fs-core#semver:0.1",
+    "@browserfs/fs-dom": "saoirse-iontach/browser-fs-dom#semver:0.1"
+  }
+}
